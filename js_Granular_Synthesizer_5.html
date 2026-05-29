@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Granular Synthesizer · Audio Grain Cloud</title>
+    <style>
+        /* ========== CSS (merged from style.css with slight enhancements) ========== */
+        :root {
+            --bg-color: #000000;
+            --text-color: #ffffff;
+            --primary-color: #ffffff;
+            --secondary-color: #242424;
+            --accent-color: #ffffff;
+            --visualizer-color: #ffffff9f;
+            --grain-color: #ffffff;
+            --card-shadow: 0 8px 20px rgba(0,0,0,0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            transition: background 0.2s ease;
+        }
+
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            background-color: var(--bg-color);
+        }
+
+        h1 {
+            color: var(--accent-color);
+            margin-top: 0;
+            font-weight: 600;
+            font-size: 1rem;
+        }
+
+        h2 {
+            color: var(--text-color);
+            border-bottom: 2px solid var(--accent-color);
+            display: inline-block;
+            margin-top: 0;
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        p{
+            margin: auto 20px;
+            line-height: 1.5;
+        }
+
+        .control-panel {
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            background-color: var(--primary-color);
+            border: none;
+            padding: 10px 22px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+
+
+        .file-input {
+            display: inline-block;
+            padding: 10px 22px;
+            background-color: var(--secondary-color);
+            color: var(--text-color);
+            cursor: pointer;
+            font-weight: 500;
+            transition: 0.1s;
+            backdrop-filter: blur(2px);
+        }
+
+
+        .file-input input {
+            display: none;
+        }
+
+        .file-status {
+            font-size: 0.85rem;
+            background: var(--secondary-color);
+            font-family: monospace;
+        }
+
+        canvas {
+            width: 100%;
+            height: 180px;
+            background-color: var(--bg-color);
+            border: 1px solid var(--secondary-color);
+            display: block;
+        }
+
+        .waveform-display {
+            position: relative;
+            height: 110px;
+            overflow: visible;
+            cursor: crosshair;
+            background: var(--secondary-color);
+        }
+
+        .waveform {
+            width: 100%;
+            height: 100%;
+            background-color: transparent;
+            display: block;
+        }
+
+        .playhead {
+            position: absolute;
+            top: 0;
+            width: 2px;
+            height: 100%;
+            background-color: var(--accent-color);
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 0 3px var(--accent-color);
+        }
+
+        .position-marker {
+            position: absolute;
+            top: 0;
+            width: 10px;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.25);
+            border: 1px solid var(--grain-color);
+            cursor: grab;
+            transform: translateX(-50%);
+            z-index: 20;
+            transition: background 0.05s;
+            backdrop-filter: blur(4px);
+        }
+
+        .position-marker:active {
+            cursor: grabbing;
+        }
+
+        .grain-visualization {
+            position: absolute;
+            top: 0;
+            height: 100%;
+            background-color: var(--grain-color);
+            opacity: 0.2;
+            pointer-events: none;
+            z-index: 5;
+            transition: width 0.1s linear;
+        }
+
+        .parameters {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 0px;
+            margin-bottom: 10px;
+        }
+
+        .param-group {
+            background-color: var(--secondary-color);
+            padding: 18px 20px;
+            box-shadow: var(--card-shadow);
+            backdrop-filter: blur(2px);
+        }
+
+        .param-control {
+            margin-bottom: 10px;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent-color);
+            height: 4px;
+        }
+
+        .info-box {
+            background-color: var(--secondary-color);
+            font-size: 0.9rem;
+            border-left: 4px solid var(--accent-color);
+        }
+
+        .no-file-message {
+            text-align: center;
+            background-color: var(--secondary-color);
+            margin-bottom: 20px;
+            font-size: 1rem;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 0;
+            }
+            .param-group {
+                padding: 4px;
+            }
+            .control-panel {
+                gap: 0px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Granular Synthesizer</h1>
+
+    <div class="control-panel">
+        <button id="play-button">2. ▶ Start</button>
+        <label class="file-input">
+            <input type="file" id="audio-file" accept="audio/*">
+            1. Upload Sample
+        </label>
+        <div class="file-status" id="file-status">No audio loaded</div>
+    </div>
+
+    <div id="content-container">
+        <div id="synth-ui">
+            <!-- waveform + grain overlay -->
+            <div class="waveform-display" id="waveform-container">
+                <canvas id="waveform" class="waveform"></canvas>
+                <div class="playhead" id="playhead"></div>
+                <div class="position-marker" id="position-marker"></div>
+            </div>
+
+            <div class="parameters">
+                <div class="param-group">
+                    <h2>Grain Morphology</h2>
+                    <div class="param-control">
+                        <label>Grain Size<span id="grain-size-value">100</span> ms</label>
+                        <input type="range" id="grain-size" min="100" max="3000" value="100">
+                    </div>
+                    <div class="param-control">
+                        <label>Random Grain Size<span id="random-grain-size-value">0</span> %</label>
+                        <input type="range" id="random-grain-size" min="0" max="100" value="0">
+                    </div>
+                    <div class="param-control">
+                        <label>Overlap<span id="grain-overlap-value">1.0</span></label>
+                        <input type="range" id="grain-overlap" min="0" max="1000.0" value="0.0">
+                    </div>
+                    <div class="param-control">
+                        <label>Position<span id="position-value">50.00</span> %</label>
+                        <input type="range" id="position" min="0.0" max="100.0" value="50.0" step="0.01">
+                    </div>
+                    <div class="param-control">
+                        <label>Position Random<span id="position-random-value">0</span> %</label>
+                        <input type="range" id="position-random" min="0" max="50" value="0" step="0.01">
+                    </div>
+                </div>
+
+                <div class="param-group">
+                    <h2>Motion & Dynamics</h2>
+                    <div class="param-control">
+                        <label>Base Rate<span id="rate-value">1.00</span></label>
+                        <input type="number" id="rate" min="0.1" max="5.0" step="0.01" value="1">
+                    </div>
+                    <div class="param-control">
+                        <label>Random Rate <span id="rate-random-value">1</span></label>
+                        <input type="text" id="rate-random" value="1,1," size="10">
+                    </div>
+
+                    <h2>DJ-Filter & Volume</h2>
+
+                    <div class="param-control">
+                        <label>Filter Type: <span id="dj-filter-type">Bypass (0000 Hz)</span></label>
+                        <input type="range" id="dj-filter" min="-100" max="100" step="1" value="0">
+                    </div>
+                    <div class="param-control">
+                        <label>Resonance (Q) <span id="dj-resonance-val">1.0</span></label>
+                        <input type="range" id="dj-resonance" min="0.0001" max="15" step="0.1" value="1.0">
+                    </div>
+                    <div class="param-control">
+                        <label>Volume<span id="volume-value">0</span>%</label>
+                        <input type="range" id="volume" min="0" max="100" step="1" value="0">
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p>===================</p>
+        <div class="semitone-content">
+            <h1>Semitone Ratio Calculator</h1>
+            <p class="formula">Ratio = 2^(Semitone_Offset / 12)</p>
+            <label for="semitones">Semitone Offset: </label>
+            <input type="number" id="semitones" value="0" step="1">
+            <div class="result">
+                <div>Frequency Multiplier Ratio:</div>
+                <div class="ratio" id="semitones-output-ratio">1.000000</div>
+            </div>
+        </div>
+        <p>===================</p>
+        <div class="guide-container">
+            <h4>Thanks for the help with AI and LLM. 
+                This APP is also references the "Granular Synthesizer" by Mikey Nichols on CodePen:
+                <a href="https://codepen.io/mnichols08/pen/azzbRLJ" target="_blank">https://codepen.io/mnichols08/pen/azzbRLJ</a>
+            </h4>
+            <h3>Quick Start</h3>
+            <ol>
+                <li><strong>Load Audio:</strong> Click the <strong>1. Upload Sample</strong> button to choose an audio file from your computer. Once processed, its visual profile will render in the central waveform display.</li>
+                <li><strong>Set Output Level:</strong> Move the <strong>Volume</strong> slider up. <em>Note: The synthesizer defaults to 0% volume to ensure your hardware or hearing isn't startled by a loud initial signal.</em></li>
+                <li><strong>Activate Engine:</strong> Click the <strong>2. ▶ Start</strong> button. The text will change to <strong>Stop</strong>, and the granular audio engine will begin firing.</li>
+                <li><strong>Navigate:</strong> Click the waveform display with your cursor to move the silver positioning bar. This shifts the exact spot in the file where grains are being captured.</li>
+            </ol>
+            
+            <h3>Grain Morphology</h3>
+            <p>This module dictates the structural geometry and harvesting location of individual grains.</p>
+            <ul>
+                <li><strong>Grain Size (ms):</strong> Controls the raw duration of each grain (from 100ms to 3000ms). Tiny settings yield pointillistic, ticking sounds; long settings yield recognizable loops.</li>
+                <li><strong>Random Grain Size (%):</strong> Scales how much variance is applied to grain durations. At 0%, every grain is uniform. At higher values, grain sizes drift randomly for a less mechanical feel.</li>
+                <li><strong>Overlap:</strong> Adjusts the density of the engine. Higher values pack more grains into the timeline simultaneously, blending them into a smooth, seamless background texture. Lower values cause gaps, introducing stutter patterns.</li>
+                <li><strong>Position (%):</strong> The underlying timeline marker indicating where grains are pulled from the master sample. Changing this is mirrored instantly by the vertical playhead line.</li>
+                <li><strong>Position Random (%):</strong> Creates spatial scattering around your selected Position. Keeping this at 0% freezes grain sampling to an exact millisecond. Raising it instructs the engine to scatter its grain selections forward or backward around that position, creating a blurred, abstract smear.</li>
+            </ul>
+
+            <h3>Motion & Dynamics</h3>
+            <p>This module regulates velocity profiles, tracking speeds, and overall acoustic output.</p>
+            <ul>
+                <li><strong>Base Rate:</strong> Regulates the playback rate (and consequently pitch) of the grain stream. <code>1.00</code> preserves native speed/pitch. <code>2.00</code> forces a double-speed playback (up an octave), while <code>0.50</code> cuts speed in half (down an octave).</li>
+                <li><strong>Random Rate:</strong> An advanced parameter accepting an array of numeric factors separated by commas (e.g., <code>1,1,</code> or custom lists like <code>1, 0.5, 1.5</code>). The engine jumps between these values randomly as new grains are spawned, making it easy to create complex arpeggiations or multi-octave textures.</li>
+                <li><strong>Volume (%):</strong> Modulates the final master gain node before sending audio to your destination outputs.</li>
+            </ul>
+
+            <h3>Semitone Ratio Calculator</h3>
+            <p>Because the <strong>Base Rate</strong> parameters require absolute playback speed multipliers instead of standard western note names, a conversion calculator is included at the bottom. It processes the underlying formula:</p>
+            
+            <div style="text-align: center; margin: 15px 0; font-family: monospace; font-size: 1.1rem; color: var(--accent-color);">
+                Ratio = 2^(Semitone_Offset / 12)
+            </div>
+            
+            <p>Type any integer value into the <strong>Semitone Offset</strong> input to see the exact numeric multiplier required to hit that musical note interval. You can type this result directly into the <strong>Base Rate</strong> control box to tune your synthesizer perfectly to scale.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Semitone Input</th>
+                        <th>Musical Interval Result</th>
+                        <th>Calculated Multiplier Ratio</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>-12</strong></td>
+                        <td>One Octave Down</td>
+                        <td><code>0.500000</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>0</strong></td>
+                        <td>Unison (Original Pitch)</td>
+                        <td><code>1.000000</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>+4</strong></td>
+                        <td>Major Third Up</td>
+                        <td><code>1.259921</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>+7</strong></td>
+                        <td>Perfect Fifth Up</td>
+                        <td><code>1.498307</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>+12</strong></td>
+                        <td>One Octave Up</td>
+                        <td><code>2.000000</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Creative Techniques to Explore</h3>
+            <ul>
+                <li><strong>The Time-Stretching Ambient Wash:</strong> Upload a melodic sample, increase <strong>Overlap</strong> to a high value, set <strong>Position Random</strong> to around 5%–15%, and slowly scrub through the waveform. This detaches the pitch from standard playback speed, freezing moments in time into massive, infinite drone pads.</li>
+                <li><strong>Micro-Glitch Sequences:</strong> Pull your <strong>Grain Size</strong> down near its minimum (100ms) and lower the <strong>Overlap</strong> control. Turn up <strong>Random Grain Size</strong> slightly to generate crisp, rhythmic pops and skittering microsound rhythms.</li>
+                <li><strong>Generative Harmonic Clusters:</strong> Use the <strong>Random Rate</strong> input array to play chords from a single sample tone. By inputting comma-separated ratio values like <code>0.5, 1, 1.259921, 1.498307, 2</code>, the synthesizer will scatter its grains across multiple octave and chord intervals simultaneously.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function(){
+        // ---------- DOM elements ----------
+        const playButton = document.getElementById("play-button");
+        const audioFileInput = document.getElementById("audio-file");
+        const fileStatus = document.getElementById("file-status");
+        const noFileMessage = document.getElementById("no-file-message");
+        const synthUI = document.getElementById("synth-ui");
+        const waveformContainer = document.getElementById("waveform-container");
+        const waveformCanvas = document.getElementById("waveform");
+        const playheadDiv = document.getElementById("playhead");
+        const positionMarker = document.getElementById("position-marker");
+        //const visualizer = document.getElementById("visualizer");
+
+        // Sliders
+        const grainSizeSlider = document.getElementById("grain-size");
+        const grainSizeValue = document.getElementById("grain-size-value");
+        const randomGrainSizeSlider = document.getElementById("random-grain-size");
+        const randomGrainSizeValue = document.getElementById("random-grain-size-value");
+        const grainOverlapSlider = document.getElementById("grain-overlap");
+        const grainOverlapValue = document.getElementById("grain-overlap-value");
+        const positionSlider = document.getElementById("position");
+        const positionValue = document.getElementById("position-value");
+        const positionRandomSlider = document.getElementById("position-random");
+        const positionRandomValue = document.getElementById("position-random-value");
+
+        const rateInput = document.getElementById("rate");
+        const rateValue = document.getElementById("rate-value");
+        const rateRandomInput = document.getElementById("rate-random");
+        const rateRandomValue = document.getElementById("rate-random-value");
+        const volumeSlider = document.getElementById("volume");
+        const volumeValue = document.getElementById("volume-value");
+
+        //semitone offset ratio
+        const semitonesInput = document.getElementById('semitones');
+        const semitonesOutput = document.getElementById('semitones-output-ratio');
+
+
+        // DJ Filter DOM elements
+        const djFilterSlider = document.getElementById("dj-filter");
+        const djFilterTypeLabel = document.getElementById("dj-filter-type");
+        const djResonanceSlider = document.getElementById("dj-resonance");
+        const djResonanceVal = document.getElementById("dj-resonance-val");
+
+        // Audio globals
+        let audioContext = null;
+        let audioBuffer = null;
+        let isPlaying = false;
+        let animationFrame = null;
+        let grainVisualizations = [];
+        let nextGrainTime = 0;
+        let scheduleIntervalId = null;
+
+
+        // Settings
+        let settings = {
+            grainSize: 0.1,       // seconds
+            randomGrainSize: 0.0,   // percentage of grain size
+            overlap: 1.0,
+            position: 0.5,
+            positionRandom: 0.0,
+            playbackRate: 1.0,
+            rateRandom: [1.0,1.0],
+            djFilterValue: 0,      // Range: -100 to 100
+            djResonance: 1.0,       // Q factor
+            volume: 0.0,
+        };
+
+        class LogSlider {
+            constructor(minOutput, maxOutput, sliderMax = 100) {
+                this.minOut = minOutput;
+                this.maxOut = maxOutput;
+                this.sliderMax = sliderMax;
+                // We use a shift factor (+1) so we never pass 0 or negatives to Math.log
+                this.minLog = Math.log(1); 
+                this.maxLog = Math.log(maxOutput - minOutput + 1);
+                this.scale = (this.maxLog - this.minLog) / this.sliderMax;
+            }
+            // Convert slider position (0-100) to the logarithmic output value
+            positionToValue(position) {
+                if (position === 0) return this.minOut;
+                if (position === this.sliderMax) return this.maxOut;
+                
+                const logValue = Math.exp(this.minLog + this.scale * position);
+                // Shift the value back down to the user's intended scale
+                return logValue - 1 + this.minOut;
+            }
+
+            // Convert an output value back to a slider position (0-100)
+            // (Crucial if you want to set the slider programmatically later!)
+            valueToPosition(value) {
+                if (value <= this.minOut) return 0;
+                if (value >= this.maxOut) return this.sliderMax;
+
+                const logValue = value - this.minOut + 1;
+                return (Math.log(logValue) - this.minLog) / this.scale;
+            }
+        }
+
+        // Helper to init/resume audio context
+        function initAudioContext() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            } else if (audioContext.state === "suspended") {
+                audioContext.resume();
+            }
+            return audioContext;
+        }
+
+        // Draw waveform (from buffer)
+        function drawWaveform() {
+            if (!audioBuffer || !waveformCanvas) return;
+            const canvas = waveformCanvas;
+            const ctx = canvas.getContext("2d");
+            canvas.width = canvas.clientWidth;
+            canvas.height = canvas.clientHeight;
+            const width = canvas.width;
+            const height = canvas.height;
+            
+            const bgColor = getComputedStyle(document.documentElement).getPropertyValue('--bg-color').trim() || "#f5f5f5";
+            ctx.fillStyle = bgColor;
+            ctx.fillRect(0, 0, width, height);
+            
+            const channelData = audioBuffer.getChannelData(0);
+            const step = Math.max(1, Math.ceil(channelData.length / width));
+            ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-color').trim() || "#333";
+            
+            for (let i = 0; i < width; i++) {
+                const startSample = i * step;
+                let min = channelData[startSample];
+                let max = min;
+                for (let j = 0; j < step && (startSample + j) < channelData.length; j++) {
+                    const val = channelData[startSample + j];
+                    if (val < min) min = val;
+                    if (val > max) max = val;
+                }
+                const y1 = ((1 + min) * height) / 2;
+                const y2 = ((1 + max) * height) / 2;
+                ctx.fillRect(i, y1, 2, Math.max(1, y2 - y1));
+            }
+        }
+
+        function updatePositionMarkerUI() {
+            if (!positionMarker) return;
+            const percent = settings.position * 100;
+            positionMarker.style.left = `${percent}%`;
+            if (positionSlider && parseFloat(positionSlider.value) !== percent) {
+                positionSlider.value = percent;
+                positionValue.textContent = percent.toFixed(1);
+            }
+            // also update playhead if playing? but playhead shows currently playing position? we keep playhead static or dynamic? let's not.
+        }
+
+        // Called when position slider changes
+        function setPositionFromSlider(valuePercent) {
+            settings.position = Math.min(1, Math.max(0, valuePercent / 100));
+            updatePositionMarkerUI();
+        }
+
+        // play a single grain with envelope + randomness
+        function playGrain(scheduledTime, duration) {
+            if (!audioBuffer || !audioContext) return;
+            const source = audioContext.createBufferSource();
+            source.buffer = audioBuffer;
+            
+            const posRand = (Math.random() * 2 - 1) * settings.positionRandom;
+            let grainPos = settings.position + posRand;
+            grainPos = Math.min(0.999, Math.max(0, grainPos));
+            const startSeconds = grainPos * audioBuffer.duration;
+            
+            let randomIndex = Math.floor(Math.random() * settings.rateRandom.length);
+            let randRate = settings.rateRandom[randomIndex] || 0;
+            //console.log(`Random rate chosen: ${randRate} from index ${randomIndex}`);
+            let finalRate = settings.playbackRate * randRate;
+            finalRate = Math.max(0.2, Math.min(5.0, finalRate));
+            //console.log(`Grain at ${startSeconds}s, rate: ${finalRate}`);
+            source.playbackRate.value = finalRate;
+            
+            const envelope = audioContext.createGain();
+            envelope.gain.value = 0;
+            const fade = Math.min(0.01, duration / 2);
+            envelope.gain.setValueAtTime(0, scheduledTime);
+            envelope.gain.linearRampToValueAtTime(settings.volume, scheduledTime + fade);
+            envelope.gain.linearRampToValueAtTime(settings.volume, scheduledTime + duration - fade);
+            envelope.gain.linearRampToValueAtTime(0, scheduledTime + duration);
+            
+            // Create a filter node for this specific grain
+            const filterNode = audioContext.createBiquadFilter();
+            // Interpret the slider value (-100 to 100) as a classic DJ filter style
+            if (settings.djFilterValue === 0) {
+                // Center point: Bypass the filter completely
+                filterNode.type = "allpass"; 
+            } else if (settings.djFilterValue < 0) {
+                filterNode.type = "lowpass";
+                const norm = (settings.djFilterValue + 100) / 100; // Normalizes to 0.0 - 0.99
+                filterNode.frequency.value = 60 + Math.pow(norm, 3) * 10000;
+            } else {
+                filterNode.type = "highpass";
+                const norm = settings.djFilterValue / 100; // Normalizes to 0.01 - 1.0
+                filterNode.frequency.value = 80 + Math.pow(norm, 2) * 8000;
+            }
+            // Apply the resonance factor
+            filterNode.Q.value = settings.djResonance;
+            // Routing Chain: Source -> Envelope -> DJ Filter -> Output
+            source.connect(envelope);
+            envelope.connect(filterNode);
+            filterNode.connect(audioContext.destination);
+            source.start(scheduledTime, startSeconds, duration);
+            // visual feedback grain
+            addGrainVisualization(grainPos, duration);
+        }
+
+        function addGrainVisualization(positionRatio, durationSec) {
+            const grainDiv = document.createElement("div");
+            grainDiv.className = "grain-visualization";
+            // width relative to waveform container: approx pixel width (min 4px, max 800px based on duration)
+            let widthPx = Math.max(4, Math.min(800, durationSec*100));
+            grainDiv.style.left = `${positionRatio * 100}%`;
+            grainDiv.style.width = `${widthPx}px`;
+            waveformContainer.appendChild(grainDiv);
+            grainVisualizations.push({ element: grainDiv, created: audioContext.currentTime });
+            cleanupOldGrains();
+        }
+        
+        function cleanupOldGrains() {
+            const now = audioContext ? audioContext.currentTime : performance.now() / 1000;
+            const KEEP_SEC = 1;
+            while (grainVisualizations.length && (now - grainVisualizations[0].created) > KEEP_SEC) {
+                const old = grainVisualizations.shift();
+                if(old.element && old.element.remove) old.element.remove();
+            }
+            if (grainVisualizations.length > 50) {
+                const oldest = grainVisualizations.shift();
+                if(oldest.element) oldest.element.remove();
+            }
+        }
+
+        // scheduling loop
+        let schedulingActive = false;
+        // 修改後的排程邏輯
+        let scheduleAheadTime = 0.1; // 提前排程的時間視窗（秒），例如 100ms
+        let scheduleInterval = 35;   // 定時器觸發頻率（毫秒）
+
+        function scheduleGrainsLoop() {
+            if (!isPlaying || !audioContext) return;
+
+            const now = audioContext.currentTime;
+
+            // 當下一次該播放的顆粒時間，落在我們的「提前排程視窗」內時
+            while (nextGrainTime < now + scheduleAheadTime) {
+                
+                // 計算這個顆粒隨機後的長度
+                let randomGrainSizeFactor = 1 + settings.randomGrainSize * (Math.random() * 2 - 1);
+                randomGrainSizeFactor = Math.min(2.0, Math.max(0.1, randomGrainSizeFactor));
+                let grainDuration = settings.grainSize * randomGrainSizeFactor;
+
+                // 【核心改變】將 nextGrainTime（精準的音訊時鐘）直接傳給播放函式
+                playGrain(nextGrainTime, grainDuration);
+
+                // 計算下一個顆粒的時間
+                const interval = grainDuration / Math.max(0.1, settings.overlap);
+                nextGrainTime += interval;
+            }
+
+            // 使用常規的 setTimeout 連續觸發
+            // 即使在背景被瀏覽器降頻，只要 scheduleAheadTime 夠大，音訊就不會斷
+            if (schedulingActive) {
+                setTimeout(() => scheduleGrainsLoop(), scheduleInterval);
+            }
+        }
+
+        function startGranularSynthesis() {
+            if (!audioBuffer) {
+                alert("📢 Please load an audio file first.");
+                return;
+            }
+            initAudioContext();
+            if (audioContext.state === "suspended") audioContext.resume().catch(e=>console.warn);
+            
+            isPlaying = true;
+            nextGrainTime = audioContext.currentTime + 0.02;
+            schedulingActive = true;
+            scheduleGrainsLoop();
+            
+            playButton.textContent = "Stop";
+            playButton.classList.add("active");
+            // start visualizer loop
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+            //drawAnalyzerLoop();
+        }
+        
+        function stopGranularSynthesis() {
+            isPlaying = false;
+            schedulingActive = false;
+            if (animationFrame) {
+                cancelAnimationFrame(animationFrame);
+                animationFrame = null;
+            }
+            playButton.textContent = "▶ Start";
+            playButton.classList.remove("active");
+            // optional: clear grain visualizations (but keep waveform)
+            while(grainVisualizations.length) {
+                let g = grainVisualizations.pop();
+                if(g.element) g.element.remove();
+            }
+        }
+        
+        function togglePlayback() {
+            if (isPlaying) {
+                stopGranularSynthesis();
+            } else {
+                startGranularSynthesis();
+            }
+        }
+        
+        // handle audio file load
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            fileStatus.textContent = `Loading: ${file.name}`;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    initAudioContext();
+                    const arrayBuffer = e.target.result;
+                    const decoded = await audioContext.decodeAudioData(arrayBuffer);
+                    audioBuffer = decoded;
+                    fileStatus.textContent = `${file.name} (${decoded.duration.toFixed(1)} sec)`;
+                    synthUI.style.display = "block";
+                    drawWaveform();
+                    updatePositionMarkerUI();
+                    // reset playing state if needed
+                    if (isPlaying) {
+                        stopGranularSynthesis();
+                    }
+                    // reset grain visualizations
+                    while(grainVisualizations.length) {
+                        let g = grainVisualizations.pop();
+                        if(g.element) g.element.remove();
+                    }
+                } catch(err) {
+                    console.error(err);
+                    fileStatus.textContent = "❌ Decoding error";
+                }
+            };
+            reader.onerror = () => fileStatus.textContent = "❌ File read error";
+            reader.readAsArrayBuffer(file);
+        }
+        
+        // Setup drag on position marker + click on waveform
+        function setupWaveformDrag() {
+            let dragging = false;
+            const updateFromCoord = (clientX) => {
+                const rect = waveformContainer.getBoundingClientRect();
+                let x = clientX - rect.left;
+                let percent = Math.min(1, Math.max(0, x / rect.width));
+                settings.position = percent;
+                updatePositionMarkerUI();
+            };
+            positionMarker.addEventListener("mousedown", (e) => {
+                e.preventDefault();
+                dragging = true;
+                updateFromCoord(e.clientX);
+            });
+            window.addEventListener("mousemove", (e) => {
+                if(dragging) updateFromCoord(e.clientX);
+            });
+            window.addEventListener("mouseup", () => dragging = false);
+            
+            positionMarker.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                dragging = true;
+                if(e.touches[0]) updateFromCoord(e.touches[0].clientX);
+            });
+            window.addEventListener("touchmove", (e) => {
+                if(dragging && e.touches[0]) updateFromCoord(e.touches[0].clientX);
+            });
+            window.addEventListener("touchend", () => dragging = false);
+            
+            waveformContainer.addEventListener("click", (e) => {
+                const rect = waveformContainer.getBoundingClientRect();
+                let x = e.clientX - rect.left;
+                let percent = Math.min(1, Math.max(0, x / rect.width));
+                settings.position = percent;
+                updatePositionMarkerUI();
+            });
+        }
+        
+        // bind all UI controls
+        function bindControls() {
+            grainSizeSlider.addEventListener("input", () => {
+                settings.grainSize = parseFloat(grainSizeSlider.value)/1000;
+                grainSizeValue.textContent = (settings.grainSize*1000).toFixed(0);
+            });
+
+            const logBridge_overlap = new LogSlider(1, 10, 1000);
+            grainOverlapSlider.addEventListener("input", () => {
+                settings.overlap = logBridge_overlap.positionToValue(parseFloat(grainOverlapSlider.value));
+                console.log("Grain overlap set to:", settings.overlap.toFixed(2));
+                grainOverlapValue.textContent = settings.overlap.toFixed(2);
+            });
+            const logBridge_random_size = new LogSlider(0, 100, 100);
+            randomGrainSizeSlider.addEventListener("input", () => {
+                settings.randomGrainSize = logBridge_random_size.positionToValue(parseFloat(randomGrainSizeSlider.value))/100;
+                randomGrainSizeValue.textContent = (settings.randomGrainSize * 100).toFixed(2);
+            });
+
+            positionSlider.addEventListener("input", () => {
+                const val = parseFloat(positionSlider.value);
+                settings.position = val / 100;
+                positionValue.textContent = val.toFixed(2);
+                updatePositionMarkerUI();
+            });
+            const logBridge_random_position = new LogSlider(0, 50, 50);
+            positionRandomSlider.addEventListener("input", () => {
+                settings.positionRandom = logBridge_random_position.positionToValue(parseFloat(positionRandomSlider.value))/100;
+                positionRandomValue.textContent = (settings.positionRandom * 100).toFixed(2);
+            });
+            rateInput.addEventListener("input", () => {
+                settings.playbackRate = parseFloat(rateInput.value)|| 0;
+                rateValue.textContent = settings.playbackRate.toFixed(2);
+            });
+            rateRandomInput.addEventListener("input", () => {
+                //console.log("Rate random input changed:", rateRandomInput.value);
+                let values = rateRandomInput.value.split(',');
+                let validFloats = values.map(item => parseFloat(item))
+                                    .filter(item => !isNaN(item));
+                //console.log("Raw rate random input:", validFloats);
+                settings.rateRandom = validFloats;
+                rateRandomValue.textContent = validFloats.join(', ');
+            });
+
+            // Bind DJ Filter slider behaviors
+            djFilterSlider.addEventListener("input", () => {
+                const val = parseInt(djFilterSlider.value);
+                settings.djFilterValue = val;
+                
+                // Update the UI text feedback based on dial location
+                if (val === 0) {
+                    djFilterTypeLabel.textContent = "Bypass (0000 Hz)" ;
+                } else if (val < 0) {
+                    djFilterTypeLabel.textContent = `Low-Pass (${Math.round(60 + Math.pow((val + 100) / 100, 3) * 10000)} Hz)`;
+                } else {
+                    djFilterTypeLabel.textContent = `High-Pass (${Math.round(80 + Math.pow(val / 100, 2) * 8000)} Hz)`;
+                }
+            });
+
+            // Bind Resonance control
+            djResonanceSlider.addEventListener("input", () => {
+                const qVal = parseFloat(djResonanceSlider.value);
+                settings.djResonance = qVal;
+                djResonanceVal.textContent = qVal.toFixed(1);
+            });
+
+            volumeSlider.addEventListener("input", () => {
+                settings.volume = parseInt(volumeSlider.value) / 100;
+                volumeValue.textContent = volumeSlider.value;
+            });
+
+
+            semitonesInput.addEventListener('input', () => {
+                const semitones = parseFloat(semitonesInput.value) || 0;
+                const ratio = Math.pow(2, semitones / 12);
+                // Fix to 6 decimal places for clean reading
+                semitonesOutput.textContent = ratio.toFixed(6);
+            });
+        }
+        // resize handler: redraw waveform & visualizer canvas
+        window.addEventListener("resize", () => {
+            if (audioBuffer) drawWaveform();
+        });
+        
+        // initial events
+        audioFileInput.addEventListener("change", handleFileUpload);
+        playButton.addEventListener("click", togglePlayback);
+        bindControls();
+        setupWaveformDrag();
+        
+    })();
+</script>
+</body>
+</html>
